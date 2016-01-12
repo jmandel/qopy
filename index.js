@@ -15,12 +15,10 @@ console.log("Grammer built", tick())
 var words = fs.readFileSync('allwords2.txt').toString().split('\n')
 console.log("Words loaded", words.length, tick())
 
-var example = grammar.parse("-: !!b | ~a");
+var example = grammar.parse("batm..");
 
 try {
   console.log(JSON.stringify(example, null, 2))
 } catch (e) {
   console.log(e.message, '\n', JSON.stringify(e.location, null, 2))
 }
-
-

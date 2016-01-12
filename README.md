@@ -8,7 +8,7 @@ An open-source [qat](http://www.quinapalus.com/qat.html) clone with:
 # Dev
 
 ```
-sh download.sh
 npm install
+npm run-script allwords
 npm run-script watch
 ```
