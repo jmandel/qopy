@@ -6,7 +6,7 @@ var grammarSpec = fs.readFileSync('grammar.peg').toString()
 var ticks = [new Date().getTime()]
 function tick(){
   ticks.push(new Date().getTime())
-  return (ticks.slice(-1)[0] - ticks.slice(-2)[0])
+  return ticks.slice(1).map((tickTime, i)=>tickTime - ticks[i])
 }
 
 var grammar = PEG.buildParser(grammarSpec)
@@ -20,7 +20,7 @@ var wordExists = words.reduce((coll, w) => {
 
 console.log("Words loaded", words.length, tick())
 
-var example = grammar.parse("swor.");
+var example = grammar.parse("12-: *<");
 
 function evaluate(start){
   var context = {
@@ -33,61 +33,49 @@ Array.prototype.flatMap = function(fn) {
   return Array.prototype.concat.apply([], this.map(fn));
 }
 
-function matchesPattern(p){
-  return function(word){
+/*
+ * TODO:
+ *  - figure out lead as NOT
+ *  - figure out lead as ANAGRAM
+ *  - figure out lead as LETTERBANK
+ */
 
-    word += "$"
-    var firstWord = {}
-    firstWord[word] = true
 
-    return p.reduce((matches, subpattern) => {
-      return Object.keys(matches).flatMap(matchword => {
-        switch (typeof subpattern) {
-          case 'string':
-              if (matchword.match(RegExp('^[' + subpattern+']'))){
-                return [matchword.slice(1)]
-              }
-              return []
-              break;
-          default:
-              return []
-        }
-      }).reduce((coll, word)=>{
-        coll[word] = true
-        return coll
-      }, {})
-    }, firstWord)['$'] == true
-  }
-}
-
-function evaluateExpression(e, context){
-  if (e.pattern) {
-    // var ret =  context.candidates.filter(matchesPattern(e.pattern))
+function evaluatePattern(e, context) {
+  if (e.pattern && [undefined, '`', '?`'].indexOf(e.lead) !== -1 ){
     var ret = [];
     for (var i=0;i<context.candidates.length;i++){
-      var matches = [context.candidates[i]+'$']
+      var matches = [[context.candidates[i]+'$', false]]
       for (var j=0; j<e.pattern.length; j++){
         var pattern = e.pattern[j]
         var newMatches = []
         for (var k=0; k<matches.length; k++){
-          var match = matches[k]
-          if (typeof pattern === 'string' && pattern.indexOf(match[0]) > -1){
+          var match = matches[k][0]
+          var misprinted = matches[k][1]
+
+          if (typeof pattern === 'string'){
+            var nextCharCorrect = pattern.indexOf(match[0]) !== -1
             var newMatch = match.slice(1)
-            newMatches.push(newMatch)
+            if (nextCharCorrect){
+              newMatches.push([newMatch, misprinted])
+            } else if (!misprinted && !nextCharCorrect){
+              newMatches.push([newMatch, true])
+            }
           } else if (typeof pattern ==='object' && pattern[0] === 'anything') {
+            if 
             for (var l=0;l<match.length;l++){
-              newMatches.push(match.slice(l))
+              newMatches.push([match.slice(l), misprinted])
             }
           } else if (typeof pattern ==='object' && pattern[0] === 'word') {
             for (var l=0;l<match.length;l++){
               if (wordExists[match.slice(0, l)]) {
-                newMatches.push(match.slice(l))
+                newMatches.push([match.slice(l), misprinted])
               }
             }
           } else if (typeof pattern ==='object' && pattern[0] === 'reverse-word') {
             for (var l=0;l<match.length;l++){
               if (wordExists[match.slice(0, l).split("").reverse().join("")]) {
-                newMatches.push(match.slice(l))
+                newMatches.push([match.slice(l), misprinted])
               }
             }
           }
@@ -95,11 +83,58 @@ function evaluateExpression(e, context){
         matches = newMatches
         if (matches.length === 0) break
       }
-      if (matches.indexOf('$') !== -1) ret.push(context.candidates[i])
+      var wordCounts = false;
+      for (var j=0;j<matches.length;j++){
+        if (matches[j][0] === '$' && (
+            (e.lead === undefined && matches[j][1] === false) ||
+            (e.lead === '`' && matches[j][1] === true) ||
+             e.lead === '?`')){
+          ret.push(context.candidates[i])
+          break
+        }
+      }
     }
-    console.log("Matching words", ret, tick());
     return ret
   }
+
+}
+
+function evaluateExpression(e, context){
+  var words;
+  if (e.pattern){
+    words = evaluatePattern(e, context)
+  } else if (e.op === 'and'){
+    var words = context.candidates
+    for (var i=0;i<e.args.length;i++){
+      var subExpr =e.args[i]
+      words = evaluateExpression(subExpr, Object.assign({}, context, {candidates: words}))
+    }
+  } else if (e.op === 'or'){
+    var words = []
+    for (var i=0;i<e.args.length;i++){
+      var subExpr =e.args[i]
+      words = words.concat(evaluateExpression(subExpr, context))
+    }
+  } else if (e.op === 'not'){
+    var nonWords = evaluateExpression(e.args[0], context)
+    var nonWordsObj = {}
+    for (var i=0;i<nonWords.length; i++){
+      nonWordsObj[nonWords[i]] = true
+    }
+
+    var words = []
+    for (var i=0;i<context.candidates.length;i++){
+      var word = context.candidates[i]
+      if (nonWordsObj[word] === undefined){
+        words.push(word)
+      }
+    }
+  }
+
+  console.log("Matching words", words, words.length, tick());
+  return words
+
+
 }
 
 evaluate(example)
