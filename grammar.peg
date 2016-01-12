@@ -1,5 +1,6 @@
 {
- var alphabet = "abcdefghijklmnopqrstuvwxyz";
+ var MAX_WORD_LEN = 100;
+ var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
   function topGroup(op, head, tail){
     console.log("top group", op, tail.length);
@@ -19,14 +20,14 @@
 }
 
 Start
-  = _ sizing:QopySizing? expr:QopyExpr
-  {return {sizing: sizing, expression: expr}}
+  = _ size:QopySize? expr:QopyExpr
+  {return {size: size || [0, MAX_WORD_LEN], expression: expr}}
 
 QopyExpr
   =  head:QopyExpr1 _ tail:(_ "|" _  QopyExpr)*
   { return topGroup("or", head, tail); }
 
-QopySizing
+QopySize
   = lower:Integer? range:"-"? upper:Integer? ":"
   {
     var ret = [lower || 0];
@@ -94,7 +95,7 @@ QopyClass
   = _ "[" negated:"!"? body:QopyClassInside "]" _
   {
     if (!negated) return body;
-    return alphabet
+    return ALPHABET
         .split("")
         .filter(function(c){
         return body.indexOf(c) === -1;
@@ -107,7 +108,7 @@ QopySpecial
   ">" {return ["word"];} /
   "@" {return "aeiou";} /
   "#" {return "bcdfghjklmnpqrstvwxyz";} /
-  "." {return alphabet;} /
+  "." {return ALPHABET;} /
   "*" {return ["anything"];}
 
 LOWER

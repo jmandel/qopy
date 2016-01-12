@@ -1,3 +1,4 @@
 allwords2.txt
 node_modules
 dictionary/*.txt
+npm-debug.log
