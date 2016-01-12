@@ -1,0 +1,149 @@
+{
+ var alphabet = "abcdefghijklmnopqrstuvwxyz";
+
+  function topGroup(op, head, tail){
+    console.log("top group", op, tail.length);
+    var tails = tail.map(function(t){
+        return t[3];
+    });
+
+    if (tails.length === 0) return head;
+
+    head = [head];
+    if (tails.length > 0 && tails[0].op === op){
+       head = [head[0]].concat(tails[0].args);
+       tails = tails.slice(1);
+    }
+    return {op:op, args: head.concat(tails)}
+  }
+}
+
+Start
+  = _ sizing:QopySizing? expr:QopyExpr
+  {return {sizing: sizing, expression: expr}}
+
+QopyExpr
+  =  head:QopyExpr1 _ tail:(_ "|" _  QopyExpr)*
+  { return topGroup("or", head, tail); }
+
+QopySizing
+  = lower:Integer? range:"-"? upper:Integer? ":"
+  {
+    var ret = [lower || 0];
+    if (!range){
+        ret.push(lower);
+    } else ret.push(upper || 100)
+    return ret;
+  }
+
+QopyExpr1
+  = _ head:QopyExprNot _ tail:(_ "&" _ QopyExpr1)*
+  { return topGroup("and", head, tail); }
+
+QopyExprNot
+  = _ "!" _ tail:QopyExprNot
+  {
+    if (tail && tail.op === "not") return tail.args[0]
+    return {"op": "not", args: [tail]};
+  } /
+  QopyExprRev
+
+QopyExprRev
+  = _ "~" _  tail:QopyExprRev
+  {
+    return {"op": "reverse", args: [tail]};
+  } /
+  QopyExpr3
+
+
+QopyExpr3
+  = _ pattern:QopyPattern _   { return pattern } /
+  _ "(" _ pattern:QopyExpr _ ")" _ { return pattern }
+
+QopyPattern
+  = _ lead:QopyLeadIn? _  body:QopyPatternBody
+  {
+    var ret = {pattern: body}
+    if (lead) ret.lead = lead;
+    return ret;
+  }
+
+QopyPatternBody
+ = parts:(_ LOWER _ / _ QopyClass _ / _ QopySpecial _)+
+ {return parts.map(function(p){return p[1]})}
+
+QopyLeadIn
+  = "/" / "*/" / "`" / "?`" {}
+
+QopyClassInside
+  = _ from:LOWER "-" to:LOWER _ rhs:QopyClassInside*
+  {
+    var chars = [];
+    var start = from.charCodeAt(0);
+    var end = to.charCodeAt(0);
+    if (start > end) return "";
+    for (var i=start; i<=end; i++){chars.push(String.fromCharCode(i));}
+    return chars.join("").concat(rhs);
+  }
+  / lhs:LOWER rhs:QopyClassInside*
+  {
+    return [lhs].concat(rhs);
+  }
+
+QopyClass
+  = _ "[" negated:"!"? body:QopyClassInside "]" _
+  {
+    if (!negated) return body;
+    return alphabet
+        .split("")
+        .filter(function(c){
+        return body.indexOf(c) === -1;
+        })
+        .join("");
+  }
+
+QopySpecial
+  = "<" {return ["reverse-word"];} /
+  ">" {return ["word"];} /
+  "@" {return "aeiou";} /
+  "#" {return "bcdfghjklmnpqrstvwxyz";} /
+  "." {return alphabet;} /
+  "*" {return ["anything"];}
+
+LOWER
+ = [a-z]
+
+Expression
+  = head:Term tail:(_ ("+" / "-") _ Term)* {
+      var result = head, i;
+
+      for (i = 0; i < tail.length; i++) {
+        if (tail[i][1] === "+") { result += tail[i][3]; }
+        if (tail[i][1] === "-") { result -= tail[i][3]; }
+      }
+
+      return result;
+    }
+
+Term
+  = head:Factor tail:(_ ("*" / "/") _ Factor)* {
+      var result = head, i;
+
+      for (i = 0; i < tail.length; i++) {
+        if (tail[i][1] === "*") { result *= tail[i][3]; }
+        if (tail[i][1] === "/") { result /= tail[i][3]; }
+      }
+
+      return result;
+    }
+
+Factor
+  = "(" _ expr:Expression _ ")" { return expr; }
+  / Integer
+
+Integer "integer"
+  = [0-9]+ { return parseInt(text(), 10); }
+
+_ "whitespace"
+  = [ \t\n\r]* {return "SPACE"}
+
