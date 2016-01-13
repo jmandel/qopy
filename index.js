@@ -20,7 +20,7 @@ var wordExists = words.reduce((coll, w) => {
 
 console.log("Words loaded", words.length, tick())
 
-var example = grammar.parse("4: */triangle")
+var example = grammar.parse("4: */triangl.e &  h*")
 
 try {
   console.log(JSON.stringify(example, null, 2))
@@ -48,7 +48,7 @@ Array.prototype.flatMap = function(fn) {
 function choicesFrom(e, wordDetails){
   var ret = []
   var subpattern = e.pattern[0]
-  var nexte = e.pattern.slice(1)
+  var nexte = Object.assign({}, e, {pattern: e.pattern.slice(1)})
 
   var word = wordDetails[0]
   var misprint = wordDetails[1]
@@ -84,7 +84,7 @@ function anagramChoicesFrom(e, wordDetails){
   var ret = [];
   var word = wordDetails[0];
   var subpattern = e.pattern[0]
-  var nexte = e.pattern.slice(1)
+  var nexte = Object.assign({}, e, {pattern: e.pattern.slice(1)})
 
   if (typeof subpattern === "string") {
     for (var i=0; i<subpattern.length; i++){
@@ -199,41 +199,11 @@ function evaluateExpression(e, context){
       words.push(word)
     }
   }
-  console.log("Matching words", words, words.length, tick());
   return words
-
-  if (e.pattern){
-    //words = evaluatePattern(e, context)
-  } else if (e.op === 'and'){
-    var words = context.candidates
-    for (var i=0;i<e.args.length;i++){
-      var subExpr =e.args[i]
-      words = evaluateExpression(subExpr, Object.assign({}, context, {candidates: words}))
-    }
-  } else if (e.op === 'or'){
-    var words = []
-    for (var i=0;i<e.args.length;i++){
-      var subExpr =e.args[i]
-      words = words.concat(evaluateExpression(subExpr, context))
-    }
-  } else if (e.op === 'not'){
-    var nonWords = evaluateExpression(e.args[0], context)
-    var nonWordsObj = {}
-    for (var i=0;i<nonWords.length; i++){
-      nonWordsObj[nonWords[i]] = true
-    }
-
-    var words = []
-    for (var i=0;i<context.candidates.length;i++){
-      var word = context.candidates[i]
-      if (nonWordsObj[word] === undefined){
-        words.push(word)
-      }
-    }
-  }
-
 }
 
-evaluate(example)
+var results = evaluate(example)
+console.log("Matching words", results, results.length, tick());
+
 
 
