@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch": "./node_modules/.bin/nodemon -e js,peg --exec ./node_modules/.bin/babel-node index.js --presets es2015",
-    "allwords": "./node_modules/.bin/babel-node  --presets es2015 download.js http://www.puzzlers.org/pub/wordlists/allwords2.txt > dictionary/allwords.txt"
+    "allwords": "./node_modules/.bin/babel-node  --presets es2015 download.js http://www.puzzlers.org/pub/wordlists/allwords2.txt > dictionary/allwords.txt",
+    "ukacd": "./node_modules/.bin/babel-node  --presets es2015 download.js http://www.crosswordman.com/download/UK%20Advanced%20Cryptics%20Dictionary.txt > dictionary/ukacd.txt"
   },
   "author": "",
   "license": "ISC",
