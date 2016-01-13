@@ -210,8 +210,8 @@ function splitWordInto(word, elementLengths){
 function possibleLengths(e, CAP){
   if (typeof e === 'string') return [1,1]
   if (e.match === 'anything') return [0, CAP]
-  if (e.match === 'word') return [0, CAP]
-  if (e.match === 'reverse-word') return [0, CAP]
+  if (e.match === 'word') return [2, CAP]
+  if (e.match === 'reverse-word') return [2, CAP]
 
   if (e.type === "simple-pattern") {
     var sublens = e.elements.map(sube => possibleLengths(sube, CAP))
@@ -237,7 +237,7 @@ function evaluatePatternOn(e, context, word){
   var elementLengths = elements.map(e => possibleLengths(e, word.length))
   // console.log("eltlens", elementLengths)
 
-  var minLength = elementLengths.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
+  /*  var minLength = elementLengths.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
   var maxLength = elementLengths.map( e=> e[1]).reduce( (sum, val)=> sum+val, 0 )
   // console.log("min, max", minLength, maxLength, word, targetLen)
 
@@ -248,6 +248,7 @@ function evaluatePatternOn(e, context, word){
   if (maxLength < targetLen) {
     return false
   }
+  */
 
   var splits = splitWordInto(word, elementLengths)
   for (var i=0; i<splits.length;i++){

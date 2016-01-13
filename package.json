@@ -19,6 +19,7 @@
     "request": "^2.67.0"
   },
   "devDependencies": {
+    "node-tick-processor": "0.0.2",
     "nodemon": "^1.8.1"
   }
 }
