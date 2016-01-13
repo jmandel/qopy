@@ -1,3 +1,9 @@
+/*
+ * TODO:
+ *  - re-sort dictionary by word LENGTH
+ *  - implement timeout after 1k words (configurable)
+ */
+
 import PEG from 'pegjs'
 import fs from 'fs'
 
@@ -20,7 +26,7 @@ var wordExists = words.reduce((coll, w) => {
 
 console.log("Words loaded", words.length, tick())
 
-var example = grammar.parse("4: */triangl.e &  h*")
+var example = grammar.parse("9:.<.")
 
 try {
   console.log(JSON.stringify(example, null, 2))
@@ -38,11 +44,6 @@ function evaluate(start){
 Array.prototype.flatMap = function(fn) {
   return Array.prototype.concat.apply([], this.map(fn));
 }
-
-/*
- * TODO:
- *  - optimize speed by detecting implied word length limits
- */
 
 
 function choicesFrom(e, wordDetails){
@@ -204,6 +205,3 @@ function evaluateExpression(e, context){
 
 var results = evaluate(example)
 console.log("Matching words", results, results.length, tick());
-
-
-
