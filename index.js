@@ -1,11 +1,15 @@
 /*
  * TODO:
+ *  - update to use new parse tree
+ *  - consider all splits of a word based on subpatterns
+ *  - try applying each split, returning # misprints
  *  - re-sort dictionary by word LENGTH
  *  - implement timeout after 1k words (configurable)
  */
 
 import PEG from 'pegjs'
 import fs from 'fs'
+import exampleQuery from './example'
 
 var grammarSpec = fs.readFileSync('grammar.peg').toString()
 
@@ -15,18 +19,25 @@ function tick(){
   return ticks.slice(1).map((tickTime, i)=>tickTime - ticks[i])
 }
 
-var grammar = PEG.buildParser(grammarSpec)
+try {
+  var grammar = PEG.buildParser(grammarSpec)
+} catch(e){
+  console.log(e, typeof e, e.stack)
+  console.log(e.message, '\n', JSON.stringify(e.location, null, 2))
+  process.exit(0)
+}
 console.log("Grammer built", tick())
 
-var words = fs.readFileSync('dictionary/ukacd.txt').toString().split('\n')
-var wordExists = words.reduce((coll, w) => {
+var dictionary = fs.readFileSync('dictionary/ukacd.txt').toString().split('\n')
+//dictionary = ["about", "abound", "abetter", "thousand"]
+var wordExists = dictionary.reduce((coll, w) => {
   coll[w] = true
   return coll
 }, {})
 
-console.log("Words loaded", words.length, tick())
+console.log("Words loaded", dictionary.length, tick())
 
-var example = grammar.parse("9:.<.")
+var example = grammar.parse(exampleQuery)
 
 try {
   console.log(JSON.stringify(example, null, 2))
@@ -35,10 +46,22 @@ try {
 }
 
 function evaluate(start){
+
   var context = {
-    candidates: words.filter( w => w.length >= start.size[0] && w.length <= start.size[1])
+    candidates: dictionary.filter( w => w.length >= start.qualifier.length[0] && w.length <= start.qualifier.length[1])
   }
-  return evaluateExpression(start.expression, context)
+
+  var words = []
+
+  for (var i=0;i<context.candidates.length;i++){
+    var word = context.candidates[i]
+    //console.log("so gonna wordl", word)
+    if (evaluateQualifiedPattern(start, context, word+'$')) {
+      words.push(word)
+    }
+  }
+
+  return words
 }
 
 Array.prototype.flatMap = function(fn) {
@@ -129,78 +152,159 @@ function letterbankChoicesFrom(e, wordDetails){
   return ret
 }
 
+function cartesianProduct(paramArray) {
 
-function evaluatePatternOn(e, word){
-  if (e.lead === '*/') {
-    if (word[0] === '$') return true
+  function addTo(curr, args) {
+
+    var i, copy, 
+        rest = args.slice(1),
+        last = !rest.length,
+        result = [];
+
+    for (i = 0; i < args[0].length; i++) {
+
+      copy = curr.slice();
+      copy.push(args[0][i]);
+
+      if (last) {
+        result.push(copy);
+
+      } else {
+        result = result.concat(addTo(copy, rest));
+      }
+    }
+
+    return result;
   }
 
-  if (e.pattern.length === 0){
-    var isMatch = (word[0] === '$')
-    var isMisprint = word[1]
-    return (isMatch && (
-             (e.lead === undefined && !isMisprint) ||
-             (e.lead === '/' && !isMisprint) ||
-             (e.lead === '`' && isMisprint) ||
-              e.lead === '?`'))
+  return addTo([], Array.prototype.slice.call(paramArray));
+}
+
+function splitWordInto(word, elementLengths){
+  var lengthRanges = elementLengths.map(([lower, upper]) => {
+    var ret = []
+    for (var i=lower;i<=upper;i++){
+      ret.push(i)
+    }
+    return ret
+  })
+
+  var splits = cartesianProduct(lengthRanges)
+  .filter(r =>
+    word.length - 1 ===  r.reduce((sum, val) => sum+val, 0)
+  )
+
+  return splits.map( s => {
+    var substrs = []
+    var sum = 0;
+    for (var i=0; i<s.length;i++) {
+      var len = s[i]
+      substrs.push(word.slice(sum, sum+len))
+      sum += len
+    }
+    return substrs;
+  })
+
+}
+
+function possibleLengths(e, CAP){
+  if (typeof e === 'string') return [1,1]
+  if (e.match === 'anything') return [0, CAP]
+  if (e.match === 'word') return [0, CAP]
+  if (e.match === 'reverse-word') return [0, CAP]
+
+  if (e.type === "simple-pattern") {
+    var sublens = e.elements.map(sube => possibleLengths(sube, CAP))
+    //console.log("Sublens", sublens)
+    var minLength = sublens.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
+    var maxLength = sublens.map( e=> e[1]).reduce( (sum, val)=> sum+val, 0 )
+    return [minLength, Math.min(maxLength, CAP)];
+  }
+}
+
+function elementMatches(eltSpec, value){
+  //console.log("eltmatch", eltSpec, value)
+  if (eltSpec.match === 'anything') return true
+  if (eltSpec.match === 'word') return !!wordExists[value]
+  if (eltSpec.match === 'reverse-word') return !!wordExists[value.split("").reverse().join("")]
+  if (typeof eltSpec === 'string') return eltSpec.indexOf(value) !== -1
+}
+
+function evaluatePatternOn(e, context, word){
+  // console.log("Eval pat on", word, e.elements)
+  var targetLen = word.length - 1
+  var elements = e.elements;
+  var elementLengths = elements.map(e => possibleLengths(e, word.length))
+  // console.log("eltlens", elementLengths)
+
+  var minLength = elementLengths.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
+  var maxLength = elementLengths.map( e=> e[1]).reduce( (sum, val)=> sum+val, 0 )
+  // console.log("min, max", minLength, maxLength, word, targetLen)
+
+  if (minLength > targetLen) {
+    return false
   }
 
-  var choicesFn = {
-    '/': anagramChoicesFrom,
-    '*/': letterbankChoicesFrom
-  }[e.lead] || choicesFrom
+  if (maxLength < targetLen) {
+    return false
+  }
 
-  var choices = choicesFn(e, word)
-  for (var i=0;i<choices.length;i++){
-    if (evaluatePatternOn(choices[i].nexte, choices[i].word)){
+  var splits = splitWordInto(word, elementLengths)
+  for (var i=0; i<splits.length;i++){
+    var split = splits[i]
+    var splitWorks = true
+    for (var j=0; j<elements.length;j++){
+      if (!elementMatches(elements[j], split[j])) {
+        splitWorks = false
+        break
+      }
+    }
+    if (splitWorks){
       return true
     }
   }
+
   return false
+
 }
 
-function evaluateWord(e, word){
+function evaluateSimplePattern(e, context, word){
   var ret = false;
-  if (e.pattern) {
-    ret = evaluatePatternOn(e, [word, false]);
-  } else if (e.op === 'not'){
-    ret = !evaluateWord(e.args[0], word)
-    //console.log("Not convered", word, ret)
-  } else if (e.op === 'or') {
-    for (var i=0; i< e.args.length;i++){
-      ret = evaluateWord(e.args[i], word)
-      if (ret) break
-    }
-  } else if (e.op === 'and') {
-    for (var i=0; i< e.args.length;i++){
-      ret = evaluateWord(e.args[i], word)
-      if (!ret) break
-    }
-  } else {
-    throw "Unrecognized " + e
+  if (e.elements) {
+    ret = evaluatePatternOn(e, context, word);
   }
   return ret
 }
 
-function evaluateExpression(e, context){
-  var words = []
+function evaluateQualifiedPattern(e, context, word){
+  // console.log("Evaluate qualipat", "WORD", word, word.length)
 
-  if (e.lead === '/' || e.lead === '*/'){
-    var hasStar = e.pattern.filter(p => p[0] === 'anything').length > 0
-    if (hasStar) {
-      e.pattern = e.pattern.filter(p => p[0] !== 'anything')
-      e.pattern.push(['anything'])
+ if (e.type === 'simple-pattern') {
+    return evaluateSimplePattern(e, context, word)
+ }
+
+ if (e.type !== 'compound-pattern') {
+  throw new Error("got non-compound in evaluateQualiflied" + e)
+ }
+
+ if (e.op === 'not') {
+    return !evaluateQualifiedPattern(e.args[0], context, word)
+  } else if (e.op === 'or') {
+    for (var i=0; i< e.args.length;i++){
+      if (evaluateQualifiedPattern(e.args[i], context, word))
+        return true
     }
+    return false
+  } else if (e.op === 'and') {
+    for (var i=0; i< e.args.length;i++){
+      if (!evaluateQualifiedPattern(e.args[i], context, word))
+        return false
+    }
+    return true
   }
 
-  for (var i=0;i<context.candidates.length;i++){
-    var word = context.candidates[i]
-    //console.log("so gonna wordl", word)
-    if (evaluateWord(e, word+'$')) {
-      words.push(word)
-    }
-  }
-  return words
+  throw "Unrecognized " + e
+
 }
 
 var results = evaluate(example)

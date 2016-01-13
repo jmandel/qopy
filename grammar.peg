@@ -3,39 +3,78 @@
  var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
   function topGroup(op, head, tail){
-    console.log("top group", op, tail.length);
+    //console.log("top group", op, head, tail.length);
     var tails = tail.map(function(t){
         return t[3];
     });
 
-    if (tails.length === 0) return head;
+    if (tails.length === 0) {
+    //console.log("Juist", head)
+    return head;
+    }
 
     head = [head];
     if (tails.length > 0 && tails[0].op === op){
        head = [head[0]].concat(tails[0].args);
        tails = tails.slice(1);
     }
-    return {op:op, args: head.concat(tails)}
+    return {
+     type: "compound-pattern",
+     op: op,
+     args: head.concat(tails)}
   }
 }
 
 Start
-  = _ size:QopySize? expr:QopyExpr
-  {return {size: size || [0, MAX_WORD_LEN], expression: expr}}
+  = QualifiedPattern / System
 
-QopyExpr
-  =  head:QopyExpr1 _ tail:(_ "|" _  QopyExpr)*
-  { return topGroup("or", head, tail); }
-
-QopySize
-  = lower:Integer? range:"-"? upper:Integer? ":"
-  {
-    var ret = [lower || 0];
-    if (!range){
-        ret.push(lower);
-    } else ret.push(upper || 100)
-    return ret;
+System
+  = head:(Equation / Constraint) tail:(";" System)* ";"? {
+  //console.log("TAil", tail)
+    return {
+      type:"system",
+      equations: [head].concat(tail[0] && tail[0][1].equations || [])
+    }
   }
+
+Equation
+  = _ lhs:EquationLeft _ rhs:( "=" EquationRight)? _ {
+    return {
+      lhs: lhs,
+      rhs: rhs && rhs[1]
+    }
+  }
+
+EquationLeft
+  = (Variable / QualifiedPattern)+
+
+EquationRight
+  = "("  qp:QualifiedPattern ")" {
+    return {type:"non-word-sequence", pattern:qp} 
+  } /
+  qp:QualifiedPattern {
+    return {type:"word", pattern:qp}
+  }
+
+Variable
+  = letter:[A-Z] {
+    return {type: "variable", name:letter}
+  }
+
+Constraint
+  = LengthConstraint / DifferenceConstraint
+
+LengthConstraint
+  = "|" vars:Variable+ "|" "=" val:Integer {
+  return {type: "constraint", on: vars, value: val}
+ }
+
+DifferenceConstraint
+  = "!=" Variable ( ("<" / ">")? Variable)*
+
+CompoundPattern
+  =  head:QopyExpr1 _ tail:(_ "|" _  CompoundPattern)*
+  { return topGroup("or", head, tail); }
 
 QopyExpr1
   = _ head:QopyExprNot _ tail:(_ "&" _ QopyExpr1)*
@@ -54,27 +93,75 @@ QopyExprRev
   {
     return {"op": "reverse", args: [tail]};
   } /
-  QopyExpr3
+  SimplePattern
 
+SimplePattern
+  = _ "/" _ args: Element+ _   {
+    return {
+      type: "simple-pattern",
+      anagram: true,
+      elements: args
+    }
+  } /
+  args:Element+ _  "/" _ letterbank:Element+ {
+    return {
+      type: "simple-pattern",
+      elements: args,
+      letterbank:letterbank
+    }
+  } /
+    args:Element+ {
+      return {
+        type: "simple-pattern",
+        elements: args
+      }
+    }
 
-QopyExpr3
-  = _ pattern:QopyPattern _   { return pattern } /
-  _ "(" _ pattern:QopyExpr _ ")" _ { return pattern }
+Element
+  = part:(_ LOWER _ / _ QopyClass _ / _ QopySpecial _  / _ PatternInParens _ )
+ {
+// console.log("One elt", part);
+ return part[1];
+ }
 
-QopyPattern
-  = _ lead:QopyLeadIn? _  body:QopyPatternBody
+PatternInParens
+   = _ "(" _ pattern:QualifiedPattern _ ")" _ { return pattern }
+
+QualifiedPattern
+  = _ qualifier:Qualifier _  body:CompoundPattern
   {
-    var ret = {pattern: body}
-    if (lead) ret.lead = lead;
+ // console.log("Splicing", body)
+    var ret = Object.assign({qualifier: qualifier}, body)
+   // console.log("Spliced", ret)
     return ret;
   }
 
-QopyPatternBody
- = parts:(_ LOWER _ / _ QopyClass _ / _ QopySpecial _)+
- {return parts.map(function(p){return p[1]})}
+Qualifier
+  = length:LengthSpecification? misprint:("?`" / "`")?
+  {
+    var ret = { };
+    ret.misprintAllowed = (misprint === "?`" || misprint === "`")
+    ret.misprintRequired = (misprint === "`")
 
-QopyLeadIn
-  = "/" / "*/" / "`" / "?`"
+    if(length){
+        ret.length = length;
+    } else {
+        ret.length = [0, MAX_WORD_LEN];
+    }
+
+    return ret;
+  }
+
+LengthSpecification
+  = lower:Integer? range:"-"? upper:Integer? ":"
+  {
+    var ret = [lower || 0];
+    if (!range){
+        ret.push(lower);
+    } else ret.push(upper || 100)
+    return ret;
+  }
+
 
 QopyClassInside
   = _ from:LOWER "-" to:LOWER _ rhs:QopyClassInside*
@@ -104,12 +191,12 @@ QopyClass
   }
 
 QopySpecial
-  = "<" {return ["reverse-word"];} /
-  ">" {return ["word"];} /
+  = "<" {return {match:"reverse-word"};} /
+  ">" {return {match:"word"};} /
   "@" {return "aeiou";} /
   "#" {return "bcdfghjklmnpqrstvwxyz";} /
   "." {return ALPHABET;} /
-  "*" {return ["anything"];}
+  "*" {return {match:"anything"};}
 
 LOWER
  = [a-z]
