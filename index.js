@@ -194,9 +194,7 @@ function splitWordInto(word, elementLengths){
     word.length - 1 ===  r.reduce((sum, val) => sum+val, 0)
   )
 
-  return splits.map( s => {
-    var substrs = []
-    var sum = 0;
+  return splits.map( s => { var substrs = [] var sum = 0;
     for (var i=0; i<s.length;i++) {
       var len = s[i]
       substrs.push(word.slice(sum, sum+len))
@@ -207,20 +205,8 @@ function splitWordInto(word, elementLengths){
 
 }
 
-function possibleLengths(e, CAP){
-  if (typeof e === 'string') return [1,1]
-  if (e.match === 'anything') return [0, CAP]
-  if (e.match === 'word') return [2, CAP]
-  if (e.match === 'reverse-word') return [2, CAP]
+var MAX_WORD_LEN = 100
 
-  if (e.type === "simple-pattern") {
-    var sublens = e.elements.map(sube => possibleLengths(sube, CAP))
-    //console.log("Sublens", sublens)
-    var minLength = sublens.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
-    var maxLength = sublens.map( e=> e[1]).reduce( (sum, val)=> sum+val, 0 )
-    return [minLength, Math.min(maxLength, CAP)];
-  }
-}
 
 function elementMatches(eltSpec, value){
   //console.log("eltmatch", eltSpec, value)
@@ -230,25 +216,14 @@ function elementMatches(eltSpec, value){
   if (typeof eltSpec === 'string') return eltSpec.indexOf(value) !== -1
 }
 
+var patternCache = {};
+
 function evaluatePatternOn(e, context, word){
   // console.log("Eval pat on", word, e.elements)
   var targetLen = word.length - 1
   var elements = e.elements;
-  var elementLengths = elements.map(e => possibleLengths(e, word.length))
+  var elementLengths = elements.map(e => [e.minLength, Math.min(e.maxLength, targetLen)])
   // console.log("eltlens", elementLengths)
-
-  /*  var minLength = elementLengths.map( e=> e[0]).reduce( (sum, val)=> sum+val, 0 )
-  var maxLength = elementLengths.map( e=> e[1]).reduce( (sum, val)=> sum+val, 0 )
-  // console.log("min, max", minLength, maxLength, word, targetLen)
-
-  if (minLength > targetLen) {
-    return false
-  }
-
-  if (maxLength < targetLen) {
-    return false
-  }
-  */
 
   var splits = splitWordInto(word, elementLengths)
   for (var i=0; i<splits.length;i++){

@@ -2,6 +2,28 @@
  var MAX_WORD_LEN = 100;
  var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
+ function lengthRange(args){
+    var min = 0;
+    var max = 0;
+    for (var i=0;i<args.length;i++){
+        var ai = args[i]
+        if (typeof ai === 'string'){
+            min++
+            max++
+        } else if (ai.match === 'anything'){
+            max += MAX_WORD_LEN
+        } else if (ai.match === 'word' || ai.match === 'reverse-word'){
+            min += 2
+            max = MAX_WORD_LEN
+        } else if (ai.type === 'simple-pattern'){
+            min += ai.minLength
+            max += ai.maxLength
+        }
+    }
+
+    return [min, Math.min(max, MAX_WORD_LEN)]
+ }
+
   function topGroup(op, head, tail){
     //console.log("top group", op, head, tail.length);
     var tails = tail.map(function(t){
@@ -97,23 +119,31 @@ QopyExprRev
 
 SimplePattern
   = _ "/" _ args: Element+ _   {
+    var range = lengthRange(args)
     return {
       type: "simple-pattern",
       anagram: true,
-      elements: args
+      elements: args,
+      minLength: range[0]
+      maxLength: range[1]
     }
   } /
   args:Element+ _  "/" _ letterbank:Element+ {
     return {
       type: "simple-pattern",
       elements: args,
-      letterbank:letterbank
+      letterbank:letterbank,
+      minLength: 0,
+      maxLength: MAX_WORD_LEN
     }
   } /
     args:Element+ {
+    var range = lengthRange(args)
       return {
         type: "simple-pattern",
-        elements: args
+        elements: args,
+        minLength: range[0],
+        maxLength: range[1]
       }
     }
 
