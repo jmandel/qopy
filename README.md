@@ -1,9 +1,9 @@
 # Qopy
 
-An open-source [qat](http://www.quinapalus.com/qat.html) clone with:
+An open-source [qat](http://www.quinapalus.com/qat.html) clone with dreams of:
 
- * an API
- * dreams of running on AWS Lambda
+ * an HTTP API
+ * [running on AWS Lambda](https://wgwxsz3cld.execute-api.us-east-1.amazonaws.com/test/qopy?q=/triangle)
 
 # Dev
 
