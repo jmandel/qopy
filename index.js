@@ -1,8 +1,8 @@
 /*
  * TODO:
- *  - update to use new parse tree
- *  - consider all splits of a word based on subpatterns
- *  - try applying each split, returning # misprints
+ *  - implement a separate searcher for anagram+star mode, which uses constraint propagation
+ *    to tile the elements until they don't overlap.
+  *    each position  'word' is a variable whos vals can be {unassigned, elt1, elt2, ... eltn}
  *  - re-sort dictionary by word LENGTH
  *  - implement timeout after 1k words (configurable)
  */
@@ -11,21 +11,7 @@ import PEG from 'pegjs'
 import fs from 'fs'
 import exampleQuery from './example'
 import combinatorics from 'js-combinatorics'
-function* fibonacci() { // a generator function
-    let [prev, curr] = [0, 1];
-    while (true) {
-        [prev, curr] = [curr, prev + curr];
-        yield curr;
-    }
-}
-
-for (let n of fibonacci()) {
-    console.log(n);
-    // truncate the sequence at 1000
-    if (n >= 1000) {
-        break;
-    }
-}
+import _ from 'underscore'
 
 var grammarSpec = fs.readFileSync('grammar.peg').toString()
 
@@ -45,7 +31,7 @@ try {
 console.log("Grammer built", tick())
 
 var dictionary = fs.readFileSync('dictionary/ukacd.txt').toString().split('\n')
-//dictionary = ["about", "abound", "abetter", "thousand", "url", "bought", "triangle", "altering"]
+//dictionary = ["elating"]
 var wordExists = dictionary.reduce((coll, w) => {
   coll[w] = true
   return coll
@@ -74,78 +60,69 @@ function evaluate(start){
     //console.log("so gonna wordl", word)
     if (evaluateQualifiedPattern(start, context, word+'$')) {
       words.push(word)
+      if (words.length > 1000)
+        return words
     }
   }
 
   return words
 }
 
-function elementMatches(eltSpecs, anagram, context, value){
-  //console.log("Elt matchies", eltSpecs, anagram, value)
-  if (!anagram) {
-    var eltSpec = eltSpecs[0]
-    if (eltSpec.match === 'anything') return [0]
-    if (eltSpec.match === 'word') return !!wordExists[value] ? [0] : []
-    if (eltSpec.match === 'reverse-word') return !!wordExists[value.split("").reverse().join("")] ? [0] : []
-      if (typeof eltSpec === 'string'){
-        return value.length > 0 && eltSpec.indexOf(value) !== -1 ? [0] : []
-      }
-    if (eltSpec.type){
-      return evaluateQualifiedPattern(eltSpec, context, value+'$') ? [0] : []
-    }
-  } else {
-    var possibleElements = []
-    for (var i=0; i < eltSpecs.length; i++){
-      var eltSpec = eltSpecs[i]
-      if (elementMatches([eltSpec], false, context, value).length > 0) {
-        possibleElements.push(i)
-      }
-    }
-    return possibleElements
+function elementMatches(e, element, context, word){
+  if (typeof element === 'string'){
+    return  (word.length && element.indexOf(word) !== -1)
+  }
+  if (element.match === 'anything') return true
+  if (element.match === 'word') return !!wordExists[word]
+  if (element.match === 'reverse-word') return !!wordExists[word.split("").reverse().join("")]
+  if (element.type){
+    var ret = evaluateQualifiedPattern(element, context, word+'$')
+    return ret
   }
 }
 
-function rangesFit(context, budget, anagram, ranges, elements, word){
-  if (ranges.length === 0) {
-    //console.log("Success", word)
-    return (word === '$')
+function alignElementsToWord(e, context, ranges, elements, word, count){
+  if (elements.length === 0) return (word === '$')
+  var maxElt = e.anagram ? elements.length : 1
+
+
+  // first recursive step heuristics
+  if (!count){
+    var simples = elements.filter(e=> e.length==1)
+    for (var i=0; i<simples.length;i++){
+      if (word.indexOf(simples[i]) === -1) return false
+    }
+    if (e.maxLength === e.minLength){
+      if(word.length !== e.maxLength+1) return false
+    }
+    if (word.length - 1 > e.maxLength) return false
+    if (word.length - 1 < e.minLength) return false
   }
 
-  for (var i=0; i <= word.length;i++){
-    var possibleElements = elementMatches(elements, anagram, context, word.slice(0,i))
-    //console.log("Possible", possibleElements, elements, word, i,ranges.length, elements.length, word.slice(0, i), ".")
 
-    if (possibleElements.length == 0) {
-      //console.log("Impossible", word, i)
-      continue
-    }
+  for (var i=0; i<maxElt; i++){
+    var element = elements[i]
 
-    for (var j=0;j<possibleElements.length;j++) {
-      var spliceIdx = possibleElements[j]
-      var splicedRanges = ranges.slice(0,spliceIdx).concat(ranges.slice(spliceIdx+1))
-      var splicedElts = elements.slice(0,spliceIdx).concat(elements.slice(spliceIdx+1))
-      if (rangesFit(context, budget - i, anagram, splicedRanges, splicedElts, word.slice(i))) {
-        return true
+    for (var j=ranges[i][0]; j <= ranges[i][1] && j < word.length ; j++){
+      //TODO accept misprints here, when they're enabled and when 'element' is a simple matcher
+      if (!elementMatches(e, element, context, word.slice(0,j))){
+        continue
       }
+      if (alignElementsToWord(e,
+                              context,
+                              ranges.slice(0,i).concat(ranges.slice(i+1)),
+                              elements.slice(0,i).concat(elements.slice(i+1)),
+                              word.slice(j), (count||0)+1)) {
+                                return true
+                              }
     }
   }
+
   return false
 }
 
-function evaluatePatternOn(e, context, word){
-  // console.log("Eval pat on", word, e.elements)
-  var targetLen = word.length - 1
-  var elements = e.elements
-  var elementLengths = e.ranges
-  return rangesFit(context, e.maxLength, !!e.anagram, e.ranges, elements, word)
-}
-
 function evaluateSimplePattern(e, context, word){
-  var ret = false;
-  if (e.elements) {
-    ret = evaluatePatternOn(e, context, word);
-  }
-  return ret
+  return alignElementsToWord(e, context, e.ranges, e.elements, word)
 }
 
 function evaluateQualifiedPattern(e, context, word){

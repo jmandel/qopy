@@ -1,1 +1,3 @@
-export default "/trale(ing)*"
+//export default "abou.."
+export default "/t....."
+
