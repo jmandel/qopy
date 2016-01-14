@@ -2,6 +2,20 @@
  var MAX_WORD_LEN = 100;
  var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
+ function requiredLetters(args){
+    var ret = [];
+    for (var i=0;i<args.length;i++){
+        var ai = args[i];
+        if (typeof ai === 'string' && ai.length == 1){
+            ret.push(ai)
+        } 
+        if (ai.type){
+            ret = ret.concat(ai.requiredLetters)
+        }
+    }
+    return ret;
+ }
+
  function lengthRange(args){
     var ranges = []
     var min = 0;
@@ -131,7 +145,8 @@ SimplePattern
       elements: args,
       minLength: range[0],
       maxLength: range[1],
-      ranges: range[2]
+      ranges: range[2],
+      requiredLetters: requiredLetters(args)
     }
   } /
   args:Element+ _  "/" _ letterbank:Element+ {
@@ -142,7 +157,8 @@ SimplePattern
       letterbank:letterbank,
       minLength: range[0],
       maxLength: range[1],
-      ranges: range[2]
+      ranges: range[2],
+      requiredLetters: requiredLetters(args)
     }
   } /
     args:Element+ {
@@ -152,7 +168,8 @@ SimplePattern
         elements: args,
         minLength: range[0],
         maxLength: range[1],
-        ranges: range[2]
+        ranges: range[2],
+      requiredLetters: requiredLetters(args)
       }
     }
 

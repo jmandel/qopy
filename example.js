@@ -1,3 +1,3 @@
 //export default "abou.."
-export default "/t....."
+export default "/tra(/ita).."
 

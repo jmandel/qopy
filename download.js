@@ -14,6 +14,10 @@ request(process.argv.slice(-1)[0], (err, resp, body) => {
     coll[word] = true
     return coll
   }, {})
-  var wordsSorted = Object.keys(words).sort()
+  var wordsSorted = Object.keys(words).sort((a,b)=>{
+    if (a.length !== b.length) return a.length-b.length;
+    if (a >  b) return 1
+    return -1
+  })
   console.log(wordsSorted.join('\n'))
 })
