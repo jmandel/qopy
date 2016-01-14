@@ -3,25 +3,30 @@
  var ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 
  function lengthRange(args){
+    var ranges = []
     var min = 0;
     var max = 0;
     for (var i=0;i<args.length;i++){
         var ai = args[i]
         if (typeof ai === 'string'){
+            ranges.push([1,1])
             min++
             max++
         } else if (ai.match === 'anything'){
-            max += MAX_WORD_LEN
+            ranges.push([0, MAX_WORD_LEN])
+            max = MAX_WORD_LEN
         } else if (ai.match === 'word' || ai.match === 'reverse-word'){
+            ranges.push([2, MAX_WORD_LEN])
             min += 2
             max = MAX_WORD_LEN
         } else if (ai.type === 'simple-pattern'){
+            ranges.push([ai.minLength, ai.maxLength])
             min += ai.minLength
             max += ai.maxLength
         }
     }
 
-    return [min, Math.min(max, MAX_WORD_LEN)]
+    return [min, max, ranges]
  }
 
   function topGroup(op, head, tail){
@@ -124,17 +129,20 @@ SimplePattern
       type: "simple-pattern",
       anagram: true,
       elements: args,
-      minLength: range[0]
-      maxLength: range[1]
+      minLength: range[0],
+      maxLength: range[1],
+      ranges: range[2]
     }
   } /
   args:Element+ _  "/" _ letterbank:Element+ {
+    var range = lengthRange(args)
     return {
       type: "simple-pattern",
       elements: args,
       letterbank:letterbank,
-      minLength: 0,
-      maxLength: MAX_WORD_LEN
+      minLength: range[0],
+      maxLength: range[1],
+      ranges: range[2]
     }
   } /
     args:Element+ {
@@ -143,7 +151,8 @@ SimplePattern
         type: "simple-pattern",
         elements: args,
         minLength: range[0],
-        maxLength: range[1]
+        maxLength: range[1],
+        ranges: range[2]
       }
     }
 

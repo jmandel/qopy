@@ -10,6 +10,22 @@
 import PEG from 'pegjs'
 import fs from 'fs'
 import exampleQuery from './example'
+import combinatorics from 'js-combinatorics'
+function* fibonacci() { // a generator function
+    let [prev, curr] = [0, 1];
+    while (true) {
+        [prev, curr] = [curr, prev + curr];
+        yield curr;
+    }
+}
+
+for (let n of fibonacci()) {
+    console.log(n);
+    // truncate the sequence at 1000
+    if (n >= 1000) {
+        break;
+    }
+}
 
 var grammarSpec = fs.readFileSync('grammar.peg').toString()
 
@@ -180,28 +196,31 @@ function cartesianProduct(paramArray) {
   return addTo([], Array.prototype.slice.call(paramArray));
 }
 
-function splitWordInto(word, elementLengths){
+function* splitWordInto(word, elementLengths){
   var lengthRanges = elementLengths.map(([lower, upper]) => {
     var ret = []
-    for (var i=lower;i<=upper;i++){
+    for (var i=lower;i<=Math.min(upper, word.length );i++){
       ret.push(i)
     }
     return ret
   })
+  //console.log("do carteisn", elementLengths, word, lengthRanges)
 
-  var splits = cartesianProduct(lengthRanges)
-  .filter(r =>
-    word.length - 1 ===  r.reduce((sum, val) => sum+val, 0)
-  )
-
-  return splits.map( s => { var substrs = [] var sum = 0;
-    for (var i=0; i<s.length;i++) {
-      var len = s[i]
-      substrs.push(word.slice(sum, sum+len))
-      sum += len
+  var splits = combinatorics.cartesianProduct.apply(null, lengthRanges)
+  var s = splits.next()
+  while (s){
+    if (s.reduce((sum,v)=>sum+v, 0) === word.length) {
+      var substrs = []
+      var sum = 0
+      for (var i=0; i<s.length;i++) {
+        var len = s[i]
+        substrs.push(word.slice(sum, sum+len))
+        sum += len
+      }
+      yield substrs;
     }
-    return substrs;
-  })
+    s = splits.next()
+  }
 
 }
 
@@ -218,16 +237,42 @@ function elementMatches(eltSpec, value){
 
 var patternCache = {};
 
+function rangesFit(budget, ranges, elements, word){
+
+  if (ranges.length === 0) {
+    return (word === '$')
+  }
+
+  for (var i=ranges[0][0]; i <= Math.min(budget, ranges[0][1]);i++){
+    if (!elementMatches(elements[0], word.slice(0,i))) {
+      continue
+    }
+    if (rangesFit(budget - i, ranges.slice(1), elements.slice(1), word.slice(i))) {
+      return true
+    }
+  }
+  return false
+}
+
 function evaluatePatternOn(e, context, word){
   // console.log("Eval pat on", word, e.elements)
   var targetLen = word.length - 1
-  var elements = e.elements;
-  var elementLengths = elements.map(e => [e.minLength, Math.min(e.maxLength, targetLen)])
-  // console.log("eltlens", elementLengths)
+  var elements = e.elements
+  var elementLengths = e.ranges
 
-  var splits = splitWordInto(word, elementLengths)
-  for (var i=0; i<splits.length;i++){
-    var split = splits[i]
+  return rangesFit(e.maxLength, e.ranges, elements, word)
+
+  var lengthRanges = elementLengths.map(([lower, upper]) => {
+    var ret = []
+    for (var i=lower;i<=Math.min(upper, word.length );i++){
+      ret.push(i)
+    }
+    return ret
+  })
+
+  var splits = splitWordInto(word.slice(0,-1), elementLengths)
+  //console.log(splits)
+  for (var split of splits) {
     var splitWorks = true
     for (var j=0; j<elements.length;j++){
       if (!elementMatches(elements[j], split[j])) {
